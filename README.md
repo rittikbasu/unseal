@@ -1,18 +1,18 @@
-# unsealed
+# unseal
 
 make a shareable copy of a protected pdf.
 
-unsealed is a local-only web app for opening a password-protected pdf with a password you already know, then creating an unprotected copy to share or save. the file and password stay in the browser. there is no upload api, account or document storage.
+unseal is a local-only web app for opening a password-protected pdf with a password you already know, then creating an unprotected copy to share or save. the file and password stay in the browser. there is no upload api, account or document storage.
 
 ## use it
 
 1. save the attachment from mail to files
-2. open unsealed
+2. open unseal
 3. choose the pdf
 4. enter the password you already have
 5. share the new copy or save it to files
 
-unsealed never changes or deletes the original file.
+unseal never changes or deletes the original file.
 
 ## privacy
 
@@ -42,9 +42,9 @@ the browser suite uses synthetic legacy, aes-128, aes-256 and malformed fixtures
 
 ## deployment
 
-The production app is a static site for Cloudflare Pages. no server-side pdf processing is required.
+the production app is a static site for Cloudflare Pages. no server-side pdf processing is required.
 
 ```bash
 npm run build
-pnpm dlx wrangler@latest pages deploy dist --project-name unsealed --branch main
+pnpm dlx wrangler@latest pages deploy dist --project-name unseal --branch main
 ```

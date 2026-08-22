@@ -7,11 +7,11 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
       manifest: {
-        name: "unsealed",
-        short_name: "unsealed",
-        description: "Make a shareable copy of a protected PDF.",
-        theme_color: "#f4f2ec",
-        background_color: "#f4f2ec",
+        name: "unseal",
+        short_name: "unseal",
+        description: "make a protected pdf shareable without uploading it.",
+        theme_color: "#f7f7f8",
+        background_color: "#f7f7f8",
         display: "standalone",
         start_url: "/",
         icons: [

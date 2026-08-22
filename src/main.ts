@@ -23,39 +23,30 @@ if (!app) {
 }
 
 let stage: Stage = { kind: "choose" };
-let passwordInput: HTMLInputElement | null = null;
 let outputUrl: string | undefined;
 
 const documentIcon = `
-  <svg viewBox="0 0 48 48" aria-hidden="true" class="document-icon">
-    <path d="M13 5.5h16.5L37 13v29.5H13z" />
-    <path d="M29 5.5V13h8" />
-    <path d="M19 21h12M19 27h12M19 33h8" />
+  <svg viewBox="0 0 24 24" aria-hidden="true" class="document-icon">
+    <path d="M6.5 2.75h7.3L18 6.95v14.3H6.5z" />
+    <path d="M13.75 2.75v4.2H18M9.5 11h5M9.5 14.5h5M9.5 18h3" />
   </svg>
 `;
 
-const checkIcon = `
-  <svg viewBox="0 0 48 48" aria-hidden="true" class="check-icon">
-    <circle cx="24" cy="24" r="17" />
-    <path d="m16 24 5.5 5.5L33 18" />
-  </svg>
-`;
-
-const arrowIcon = `
-  <svg viewBox="0 0 20 20" aria-hidden="true" class="arrow-icon">
-    <path d="M4 10h11M10 4l6 6-6 6" />
-  </svg>
-`;
-
-const downloadIcon = `
-  <svg viewBox="0 0 20 20" aria-hidden="true" class="button-icon">
-    <path d="M10 3v9M6.5 9.5 10 13l3.5-3.5M4 16h12" />
+const chevronIcon = `
+  <svg viewBox="0 0 16 16" aria-hidden="true" class="chevron-icon">
+    <path d="m6 3 5 5-5 5" />
   </svg>
 `;
 
 const shareIcon = `
-  <svg viewBox="0 0 20 20" aria-hidden="true" class="button-icon">
-    <path d="M10 13V3M6.5 6.5 10 3l3.5 3.5M4 10v5.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V10" />
+  <svg viewBox="0 0 16 16" aria-hidden="true" class="button-icon">
+    <path d="M8 10.5V2.75M5.25 5.5 8 2.75l2.75 2.75M3.5 8.5v3A1.75 1.75 0 0 0 5.25 13.25h5.5a1.75 1.75 0 0 0 1.75-1.75v-3" />
+  </svg>
+`;
+
+const saveIcon = `
+  <svg viewBox="0 0 16 16" aria-hidden="true" class="button-icon">
+    <path d="M8 2.75v7.5M5.25 7.75 8 10.5l2.75-2.75M3.25 13.25h9.5" />
   </svg>
 `;
 
@@ -83,63 +74,83 @@ function filenameWithoutPdf(name: string): string {
   return name.replace(/\.pdf$/i, "").replace(/\s+$/, "") || "document";
 }
 
-function fileRow(file: File): string {
-  return `
-    <div class="file-row">
-      <div class="file-icon">${documentIcon}</div>
-      <div class="file-copy">
-        <strong>${escapeHtml(file.name)}</strong>
-        <span>${formatSize(file.size)} · pdf</span>
-      </div>
-      <button type="button" class="text-button" data-action="change-file">change</button>
-    </div>
-  `;
+function outputName(file: File): string {
+  return `${filenameWithoutPdf(file.name)}-unsealed.pdf`;
 }
 
 function header(): string {
   return `
     <header class="topbar">
-      <a class="brand" href="/" aria-label="unsealed home">unsealed<span class="brand-dot">.</span></a>
-      <div class="privacy-chip">
-        <span class="privacy-dot"></span>
-        stays on this device
-      </div>
+      <a class="brand" href="/" aria-label="unseal home">unseal</a>
+      <span class="local-status"><span class="local-dot"></span>local only</span>
     </header>
+  `;
+}
+
+function stepBar(label: string, meta: string, action = ""): string {
+  return `
+    <div class="step-bar">
+      <span class="step-label">${label}</span>
+      ${action || `<span class="step-meta">${meta}</span>`}
+    </div>
+  `;
+}
+
+function fileRow(file: File, allowChange = true): string {
+  return `
+    <div class="file-row">
+      <div class="file-icon">${documentIcon}</div>
+      <div class="file-details">
+        <strong title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</strong>
+        <span>${formatSize(file.size)} · PDF</span>
+      </div>
+      ${allowChange ? '<button type="button" class="quiet-button" data-action="change-file">Change</button>' : ""}
+    </div>
   `;
 }
 
 function chooseStage(): string {
   return `
-    <section class="action-card" aria-labelledby="action-title">
-      <div class="card-kicker"><span>01</span><span>choose a file</span></div>
-      <div class="file-illustration">${documentIcon}</div>
-      <h2 id="action-title">start with your pdf</h2>
-      <p class="card-copy">pick the protected file from your phone. nothing is uploaded.</p>
-      <input id="pdf-file" class="visually-hidden" type="file" accept="application/pdf,.pdf" />
-      <button class="primary-button" type="button" data-action="choose-file">
-        choose pdf ${arrowIcon}
+    <section class="task-card" aria-labelledby="page-title">
+      ${stepBar("PDF", "1 / 2")}
+      <button class="file-picker" type="button" data-action="choose-file">
+        <span class="file-picker-icon">${documentIcon}</span>
+        <span class="file-picker-copy">
+          <strong>Choose a PDF</strong>
+          <span>from Files</span>
+        </span>
+        ${chevronIcon}
       </button>
-      <p class="card-footnote">you will need the password you already have.</p>
+      <input id="pdf-file" class="visually-hidden" type="file" accept="application/pdf,.pdf" />
     </section>
   `;
 }
 
 function passwordStage(file: File, error?: string): string {
   return `
-    <section class="action-card" aria-labelledby="action-title">
-      <div class="card-kicker"><span>02</span><span>enter the password</span></div>
+    <section class="task-card" aria-labelledby="page-title">
+      ${stepBar("PDF password", "2 / 2", '<button type="button" class="quiet-button" data-action="change-file">Change</button>')}
       ${fileRow(file)}
-      <div class="card-divider"></div>
       <form id="unlock-form" novalidate>
-        <label class="field-label" for="pdf-password">pdf password</label>
+        <label class="field-label" for="pdf-password">Password</label>
         <div class="password-field">
-          <input id="pdf-password" name="password" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" />
-          <button type="button" class="show-button" data-action="toggle-password" aria-pressed="false">show</button>
+          <input
+            id="pdf-password"
+            class="password-input is-masked"
+            name="pdf-passphrase"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            enterkeyhint="go"
+            aria-label="PDF password"
+          />
+          <button type="button" class="quiet-button reveal-button" data-action="toggle-password" aria-pressed="false">Show</button>
         </div>
-        ${error ? `<p class="inline-error" role="alert">${escapeHtml(error)}</p>` : `<p class="field-hint">passwords are used only in memory for this conversion.</p>`}
-        <button class="primary-button" type="submit">
-          create shareable copy ${arrowIcon}
-        </button>
+        ${error ? `<p class="inline-error" role="alert">${escapeHtml(error)}</p>` : ""}
+        <button class="primary-button" type="submit">Unlock PDF</button>
       </form>
     </section>
   `;
@@ -147,65 +158,47 @@ function passwordStage(file: File, error?: string): string {
 
 function processingStage(file: File): string {
   return `
-    <section class="action-card processing-card" aria-labelledby="action-title" aria-live="polite">
-      <div class="card-kicker"><span>03</span><span>making your copy</span></div>
-      <div class="processing-mark"><span class="spinner"></span></div>
-      <h2 id="action-title">one moment</h2>
-      <p class="card-copy">opening <strong>${escapeHtml(file.name)}</strong> on this device.</p>
-      <p class="card-footnote">the original file will not be changed.</p>
+    <section class="task-card processing-card" aria-labelledby="page-title" aria-live="polite">
+      ${stepBar("PDF password", "")}
+      ${fileRow(file, false)}
+      <div class="processing-state">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Unlocking PDF…</span>
+      </div>
     </section>
   `;
 }
 
-function readyStage(file: File, outputName: string): string {
+function readyStage(name: string): string {
   return `
-    <section class="action-card ready-card" aria-labelledby="action-title">
-      <div class="card-kicker"><span>04</span><span>ready to share</span></div>
-      <div class="success-mark">${checkIcon}</div>
-      <h2 id="action-title">your copy is ready</h2>
-      <p class="card-copy">${escapeHtml(outputName)} is no longer password protected.</p>
+    <section class="task-card" aria-labelledby="page-title">
+      <div class="step-bar">
+        <span class="step-label">Ready</span>
+        <span class="ready-status"><span class="ready-dot"></span>unprotected copy</span>
+      </div>
       <div class="result-row">
         <div class="result-file-icon">${documentIcon}</div>
-        <div class="file-copy">
-          <strong>${escapeHtml(filenameWithoutPdf(file.name))}-unsealed.pdf</strong>
-          <span>safe to send or save</span>
+        <div class="file-details">
+          <strong title="${escapeHtml(name)}">${escapeHtml(name)}</strong>
+          <span>PDF · ready to send</span>
         </div>
       </div>
-      <div class="button-stack">
-        <button class="primary-button" type="button" data-action="share-output">
-          share copy ${shareIcon}
+      <p class="warning-line">This copy is not password-protected.</p>
+      <div class="action-row">
+        <button class="primary-button" type="button" data-action="download-output" aria-label="Download PDF">
+          ${saveIcon}<span>Download</span>
         </button>
-        <button class="secondary-button" type="button" data-action="download-output">
-          save to files ${downloadIcon}
+        <button class="secondary-button" type="button" data-action="share-output" aria-label="Share PDF">
+          ${shareIcon}<span>Share</span>
         </button>
       </div>
-      <button class="text-button reset-button" type="button" data-action="start-over">make another copy</button>
-    </section>
-  `;
-}
-
-function errorStage(message: string): string {
-  return `
-    <section class="action-card error-card" aria-labelledby="action-title">
-      <div class="card-kicker"><span>02</span><span>try again</span></div>
-      <div class="error-mark">!</div>
-      <h2 id="action-title">that did not work</h2>
-      <p class="card-copy" role="alert">${escapeHtml(message)}</p>
-      <div class="button-stack">
-        <button class="primary-button" type="button" data-action="try-again">try again ${arrowIcon}</button>
-        <button class="secondary-button" type="button" data-action="change-file">choose another file</button>
-      </div>
-      <p class="card-footnote">the original file is still untouched.</p>
+      <button class="quiet-button reset-button" type="button" data-action="start-over">Choose another PDF</button>
     </section>
   `;
 }
 
 function render(): void {
   const root = app as HTMLDivElement;
-  const title = stage.kind === "ready" ? "your copy is ready" : "make a shareable copy";
-  const description = stage.kind === "ready"
-    ? "your original is untouched. the new copy is ready to send."
-    : "open a protected pdf with the password you know, then make a clean copy for someone else.";
   const stageMarkup =
     stage.kind === "choose"
       ? chooseStage()
@@ -214,51 +207,38 @@ function render(): void {
         : stage.kind === "processing"
           ? processingStage(stage.file)
           : stage.kind === "ready"
-            ? readyStage(stage.file, stage.outputName)
-            : errorStage(stage.message);
+            ? readyStage(stage.outputName)
+            : passwordStage(stage.file, stage.message);
 
   root.innerHTML = `
     ${header()}
     <main class="page-content">
-      <div class="content-grid">
-        <section class="intro" aria-labelledby="page-title">
-          <p class="eyebrow">protected pdfs, made shareable</p>
-          <h1 id="page-title">${title.replace(" ", " <span>")}</span></h1>
-          <p class="lede">${description}</p>
-          <div class="process-note">
-            <span class="process-number">01—04</span>
-            <span>choose · unlock · share</span>
-          </div>
-        </section>
-        <div class="action-column">
-          ${stageMarkup}
-          <p class="privacy-note"><span class="privacy-dot"></span><span><strong>your file stays on this device.</strong> your pdf and password never leave this browser.</span></p>
-        </div>
+      <div class="hero">
+        <h1 id="page-title">Make a PDF <span>shareable.</span></h1>
+      </div>
+      <div class="task-column">
+        ${stageMarkup}
       </div>
     </main>
-    <footer class="site-footer">
-      <span>unsealed</span>
-      <span>no upload · no account · no trace</span>
-    </footer>
   `;
 
   bindEvents();
   if (stage.kind === "password" || stage.kind === "error") {
-    passwordInput = document.querySelector<HTMLInputElement>("#pdf-password");
-    passwordInput?.focus();
-  } else {
-    passwordInput = null;
+    document.querySelector<HTMLInputElement>("#pdf-password")?.focus();
   }
+}
+
+function openFilePicker(): void {
+  const input = document.querySelector<HTMLInputElement>("#pdf-file");
+  if (!input) return;
+  input.value = "";
+  input.click();
 }
 
 function selectFile(file: File | undefined): void {
   if (!file) return;
   const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-  if (!isPdf) {
-    stage = { kind: "choose" };
-    render();
-    return;
-  }
+  if (!isPdf) return;
   stage = { kind: "password", file };
   render();
 }
@@ -270,8 +250,7 @@ async function unlock(file: File, password: string): Promise<void> {
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const output = await decryptPdf(bytes, password);
-    const outputName = `${filenameWithoutPdf(file.name)}-unsealed.pdf`;
-    stage = { kind: "ready", file, output, outputName };
+    stage = { kind: "ready", file, output, outputName: outputName(file) };
     render();
   } catch (error) {
     const message = error instanceof Error ? error.message : "This PDF could not be opened.";
@@ -285,10 +264,40 @@ function outputFile(): File | undefined {
   return new File([new Uint8Array(stage.output).buffer as ArrayBuffer], stage.outputName, { type: "application/pdf" });
 }
 
-function downloadOutput(): void {
-  const file = outputFile();
-  if (!file) return;
+function isAppleTouchDevice(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
 
+type ShareFileFunction = (data: { files: File[]; title: string }) => Promise<void>;
+
+function shareFunction(): ShareFileFunction | undefined {
+  const candidate = Reflect.get(navigator, "share");
+  return typeof candidate === "function" ? candidate.bind(navigator) as ShareFileFunction : undefined;
+}
+
+function canShareFile(file: File): boolean {
+  const share = shareFunction();
+  const canShare = Reflect.get(navigator, "canShare");
+  return Boolean(share && (typeof canShare !== "function" || canShare.call(navigator, { files: [file] })));
+}
+
+type ShareResult = "shared" | "cancelled" | "unsupported";
+
+async function nativeShare(file: File): Promise<ShareResult> {
+  const share = shareFunction();
+  if (!share || !canShareFile(file)) return "unsupported";
+
+  try {
+    await share({ files: [file], title: file.name });
+    return "shared";
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return "cancelled";
+    return "unsupported";
+  }
+}
+
+function directDownload(file: File): void {
   if (outputUrl) URL.revokeObjectURL(outputUrl);
   outputUrl = URL.createObjectURL(file);
   const link = document.createElement("a");
@@ -299,62 +308,58 @@ function downloadOutput(): void {
   link.remove();
 }
 
+async function downloadOutput(): Promise<void> {
+  const file = outputFile();
+  if (!file) return;
+
+  if (isAppleTouchDevice() && canShareFile(file)) {
+    await nativeShare(file);
+    return;
+  }
+
+  directDownload(file);
+}
+
 async function shareOutput(): Promise<void> {
   const file = outputFile();
   if (!file) return;
 
-  if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-    try {
-      await navigator.share({ files: [file], title: file.name });
-      return;
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-    }
-  }
-
-  downloadOutput();
+  const result = await nativeShare(file);
+  if (result === "unsupported") directDownload(file);
 }
 
 function bindEvents(): void {
   const fileInput = document.querySelector<HTMLInputElement>("#pdf-file");
-  const chooseButton = document.querySelector<HTMLButtonElement>('[data-action="choose-file"]');
-  chooseButton?.addEventListener("click", () => fileInput?.click());
+  document.querySelector<HTMLButtonElement>('[data-action="choose-file"]')?.addEventListener("click", openFilePicker);
   fileInput?.addEventListener("change", () => selectFile(fileInput.files?.[0]));
 
   document.querySelectorAll<HTMLButtonElement>('[data-action="change-file"]').forEach((button) => {
-    button.addEventListener("click", () => {
-      const input = document.querySelector<HTMLInputElement>("#pdf-file");
-      input?.click();
-    });
+    button.addEventListener("click", openFilePicker);
   });
 
   document.querySelector<HTMLFormElement>("#unlock-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (stage.kind !== "password") return;
+    if (stage.kind !== "password" && stage.kind !== "error") return;
     const form = new FormData(event.currentTarget as HTMLFormElement);
-    void unlock(stage.file, String(form.get("password") ?? ""));
+    void unlock(stage.file, String(form.get("pdf-passphrase") ?? ""));
   });
 
   document.querySelector<HTMLButtonElement>('[data-action="toggle-password"]')?.addEventListener("click", (event) => {
     const button = event.currentTarget as HTMLButtonElement;
     const input = document.querySelector<HTMLInputElement>("#pdf-password");
     if (!input) return;
-    const showing = input.type === "text";
-    input.type = showing ? "password" : "text";
-    button.textContent = showing ? "show" : "hide";
+    const showing = !input.classList.contains("is-masked");
+    input.classList.toggle("is-masked", showing);
+    button.textContent = showing ? "Show" : "Hide";
     button.setAttribute("aria-pressed", String(!showing));
-  });
-
-  document.querySelector<HTMLButtonElement>('[data-action="try-again"]')?.addEventListener("click", () => {
-    if (stage.kind !== "error") return;
-    stage = { kind: "password", file: stage.file };
-    render();
   });
 
   document.querySelector<HTMLButtonElement>('[data-action="share-output"]')?.addEventListener("click", () => {
     void shareOutput();
   });
-  document.querySelector<HTMLButtonElement>('[data-action="download-output"]')?.addEventListener("click", downloadOutput);
+  document.querySelector<HTMLButtonElement>('[data-action="download-output"]')?.addEventListener("click", () => {
+    void downloadOutput();
+  });
   document.querySelector<HTMLButtonElement>('[data-action="start-over"]')?.addEventListener("click", () => {
     if (outputUrl) URL.revokeObjectURL(outputUrl);
     outputUrl = undefined;
