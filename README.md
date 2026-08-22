@@ -38,7 +38,7 @@ npm test
 npm run build
 ```
 
-the browser suite uses synthetic encrypted and malformed fixtures. real bank statements and passwords should stay on the intended device and must never enter this repository.
+the browser suite uses synthetic legacy, aes-128, aes-256 and malformed fixtures. real bank statements and passwords should stay on the intended device and must never enter this repository.
 
 ## deployment
 
