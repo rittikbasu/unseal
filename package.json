@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neslinesli93/qpdf-wasm": "0.3.0"
+    "@neslinesli93/qpdf-wasm": "0.3.0",
+    "lucide": "^1.33.0"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",

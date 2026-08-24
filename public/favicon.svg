@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-labelledby="title">
-  <title id="title">unseal</title>
-  <rect width="64" height="64" rx="16" fill="#090A0C"/>
-  <path d="M14 10v25.5C14 47.3 21.5 55 32 55s18-7.7 18-19.5V34M50 20V9" stroke="#F4F1EA" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

@@ -1,11 +1,12 @@
 import "./styles.css";
 import { decryptPdf } from "./pdf-service";
-import { airGapMark, unboundMark } from "./brand";
+import { envelopeLogo } from "./brand";
+import { downloadIcon, eyeIcon, eyeOffIcon, fileIcon, fileLockIcon, loaderCircleIcon, shareIcon, shieldCheckIcon } from "./icons";
+import { signatureHeart } from "./signature";
 
 type Stage =
   | { kind: "choose"; message?: string }
   | { kind: "password"; file: File }
-  | { kind: "processing"; file: File }
   | { kind: "ready"; file: File; output: Uint8Array; outputName: string; message?: string }
   | { kind: "error"; file: File; message: string };
 
@@ -23,36 +24,13 @@ if (!app) {
   throw new Error("unseal app root is missing");
 }
 
-const GENERIC_PDF_ERROR = "We couldn't open this PDF. Check the password and try again.";
+const GENERIC_PDF_ERROR = "Wrong password. Try again.";
 const EMPTY_PASSWORD_ERROR = "Enter the PDF password to continue.";
+const DOCUMENT_SECRET_SELECTOR = "[data-document-secret]";
+const MIN_PROCESSING_MS = 280;
 let stage: Stage = { kind: "choose" };
+let isProcessing = false;
 let outputUrl: string | undefined;
-let keyboardModality = false;
-
-const documentIcon = `
-  <svg viewBox="0 0 24 24" aria-hidden="true" class="document-icon">
-    <path d="M6.5 2.75h7.3L18 6.95v14.3H6.5z" />
-    <path d="M13.75 2.75v4.2H18M9.5 11h5M9.5 14.5h5M9.5 18h3" />
-  </svg>
-`;
-
-const chevronIcon = `
-  <svg viewBox="0 0 16 16" aria-hidden="true" class="chevron-icon">
-    <path d="m6 3 5 5-5 5" />
-  </svg>
-`;
-
-const shareIcon = `
-  <svg viewBox="0 0 16 16" aria-hidden="true" class="button-icon">
-    <path d="M8 10.5V2.75M5.25 5.5 8 2.75l2.75 2.75M3.5 8.5v3A1.75 1.75 0 0 0 5.25 13.25h5.5a1.75 1.75 0 0 0 1.75-1.75v-3" />
-  </svg>
-`;
-
-const downloadIcon = `
-  <svg viewBox="0 0 16 16" aria-hidden="true" class="button-icon">
-    <path d="M8 2.75v7.5M5.25 7.75 8 10.5l2.75-2.75M3.25 13.25h9.5" />
-  </svg>
-`;
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>'"]/g, (character) => {
@@ -89,156 +67,119 @@ function isPdf(file: File): boolean {
 function header(): string {
   return `
     <header class="site-header">
-      <div class="brand-lockup" aria-label="unseal">
-        ${unboundMark("brand-mark")}
-        <span class="brand-name">unseal</span>
+      <div class="header-inner">
+        <div class="brand-lockup" role="img" aria-label="unseal">
+          ${envelopeLogo("brand-mark")}
+          <span class="brand-name">unseal</span>
+        </div>
       </div>
     </header>
   `;
 }
 
-function hero(stageToDescribe: Stage): string {
-  if (stageToDescribe.kind === "choose") {
-    return `
-      <p class="hero-kicker">one pdf, on this device</p>
-      <h1 id="page-title">Create an <em>unprotected copy.</em></h1>
-      <p class="hero-copy">Use the password you already know. The original stays untouched.</p>
-    `;
-  }
-
-  if (stageToDescribe.kind === "processing") {
-    return `
-      <p class="hero-kicker">working locally</p>
-      <h1 id="page-title">Creating an <em>unprotected copy…</em></h1>
-      <p class="hero-copy">The PDF never leaves this device.</p>
-    `;
-  }
-
+function intro(stageToDescribe: Stage): string {
   if (stageToDescribe.kind === "ready") {
     return `
-      <p class="hero-kicker">complete</p>
-      <h1 id="page-title">Your <em>unprotected copy</em> is ready.</h1>
-      <p class="hero-copy">It opens without a password. The original is unchanged.</p>
+      <section class="intro" aria-labelledby="page-title">
+        <h1 id="page-title">Your copy is ready.</h1>
+        <p>It opens without a password. The original is unchanged.</p>
+      </section>
     `;
   }
 
   return `
-    <p class="hero-kicker">one pdf, on this device</p>
-    <h1 id="page-title">Enter the <em>PDF password.</em></h1>
-    <p class="hero-copy">Use the password you already have. It exists only while this copy is being created.</p>
-  `;
-}
-
-function privacyRail(): string {
-  return `
-    <aside class="privacy-rail" aria-label="Privacy details">
-      <div class="privacy-mark">${unboundMark("privacy-mark-svg")}</div>
-      <div class="privacy-copy">
-        <strong>stays on this device</strong>
-        <span>your PDF and password are processed in memory. nothing is uploaded.</span>
-      </div>
-      <span class="privacy-note">original untouched</span>
-    </aside>
-  `;
-}
-
-function hiddenFileInput(label: string, overlay = false): string {
-  const className = overlay ? "file-input" : "file-input visually-hidden";
-  return `<input id="pdf-file" class="${className}" type="file" accept="application/pdf,.pdf" aria-label="${escapeHtml(label)}" />`;
-}
-
-function chooseStage(stageToRender: Extract<Stage, { kind: "choose" }>): string {
-  return `
-    <section class="task-surface choose-surface" aria-labelledby="surface-title">
-      <div class="surface-heading">
-        <div>
-          <p class="surface-kicker">start here</p>
-          <h2 id="surface-title">Choose a protected PDF</h2>
-        </div>
-        <span class="step-count">1 / 2</span>
-      </div>
-      <label class="file-picker" for="pdf-file">
-        ${hiddenFileInput("Choose a PDF from Files", true)}
-        <span class="file-picker-icon">${documentIcon}</span>
-        <span class="file-picker-copy">
-          <strong>Choose PDF</strong>
-          <span>from Files</span>
-        </span>
-        ${chevronIcon}
-      </label>
-      ${stageToRender.message ? `<p id="choose-error" class="inline-error" role="alert">${escapeHtml(stageToRender.message)}</p>` : ""}
+    <section class="intro" aria-labelledby="page-title">
+      <h1 id="page-title">Unseal your password protected PDF.</h1>
+      <p>Create a copy that opens without a password. Your PDF never leaves this device.</p>
     </section>
   `;
 }
 
-function selectedFileRow(file: File, allowChange = true): string {
+function panelBar(title: string, status?: string, focusable = false): string {
   return `
-    <div class="selected-file">
-      <div class="file-icon">${documentIcon}</div>
-      <div class="file-details">
-        <span class="file-state">protected original</span>
-        <strong title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</strong>
-        <span>${formatSize(file.size)} · PDF</span>
-      </div>
-      ${allowChange ? '<button type="button" class="text-button" data-action="change-file">Change PDF</button>' : ""}
+    <div class="panel-bar">
+      <h2 id="panel-title"${focusable ? ' tabindex="-1"' : ""}>${title}</h2>
+      ${status ? `<span>${status}</span>` : ""}
     </div>
+  `;
+}
+
+function hiddenFileInput(label: string, overlay = false): string {
+  const className = overlay ? "file-input" : "visually-hidden";
+  return `<input id="pdf-file" class="${className}" type="file" accept="application/pdf,.pdf" aria-label="${escapeHtml(label)}" />`;
+}
+
+function selectedFileRow(file: File, allowChange = true, result = false): string {
+  return `
+    <div class="file-row${result ? " result-file" : ""}">
+      <div class="file-icon">${result ? fileIcon() : fileLockIcon()}</div>
+      <div class="file-copy">
+        <strong title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</strong>
+        <span>${formatSize(file.size)} · ${result ? "opens without a password" : "protected PDF"}</span>
+      </div>
+      ${allowChange ? '<button type="button" class="quiet-button" data-action="change-file">Change</button>' : ""}
+    </div>
+  `;
+}
+
+function chooseStage(stageToRender: Extract<Stage, { kind: "choose" }>): string {
+  return `
+    <section class="flow-panel choose-panel" aria-labelledby="panel-title">
+      ${panelBar("Choose PDF")}
+      <div class="panel-body">
+        <label class="choose-control" for="pdf-file">
+          ${hiddenFileInput("Choose a protected PDF from Files", true)}
+          <span class="file-icon">${fileLockIcon()}</span>
+          <span class="file-copy">
+            <strong>Choose a protected PDF</strong>
+            <span>Browse Files</span>
+          </span>
+          <span class="choose-action">Choose</span>
+        </label>
+        ${stageToRender.message ? `<p id="choose-error" class="inline-error" role="alert">${escapeHtml(stageToRender.message)}</p>` : ""}
+      </div>
+    </section>
   `;
 }
 
 function passwordStage(file: File, error?: string): string {
   return `
-    <section class="task-surface password-surface" aria-labelledby="surface-title">
-      <div class="surface-heading">
-        <div>
-          <p class="surface-kicker">step two</p>
-          <h2 id="surface-title">Enter the PDF password</h2>
+    <section class="flow-panel password-panel" aria-labelledby="panel-title" aria-busy="${isProcessing}">
+      ${panelBar("Enter password")}
+      <div class="panel-body password-grid">
+        ${selectedFileRow(file)}
+        ${hiddenFileInput("Choose a different PDF")}
+        <div id="unlock-controls" class="password-controls">
+          <div class="field-heading">
+            <label for="document-value">PDF password</label>
+            <span>used once, never saved</span>
+          </div>
+          <div class="password-field">
+            <textarea
+              id="document-value"
+              class="password-input is-masked"
+              data-document-secret
+              rows="1"
+              wrap="off"
+              inputmode="text"
+              autocomplete="one-time-code"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              enterkeyhint="go"
+              aria-multiline="false"
+              aria-describedby="document-hint${error ? " document-error" : ""}"
+              aria-invalid="${error ? "true" : "false"}"
+              aria-label="PDF password"
+            ></textarea>
+            <button type="button" class="quiet-button reveal-button" data-action="toggle-password" aria-pressed="false" aria-label="show password">${eyeIcon()}</button>
+          </div>
+          <p id="document-hint" class="visually-hidden">used once, never saved.</p>
+          ${error ? `<p id="document-error" class="inline-error" role="alert">${escapeHtml(error)}</p>` : ""}
+          <button class="primary-button create-copy-button" type="button" data-action="create-copy"${isProcessing ? ' disabled aria-busy="true"' : ""}>
+            ${isProcessing ? `${loaderCircleIcon()}<span>Creating copy</span>` : "Create copy"}
+          </button>
         </div>
-        <span class="step-count">2 / 2</span>
-      </div>
-      ${selectedFileRow(file)}
-      ${hiddenFileInput("Choose a different PDF")}
-      <form id="unlock-form" novalidate>
-        <label class="field-label" for="pdf-password">Password</label>
-        <div class="password-field">
-          <input
-            id="pdf-password"
-            class="password-input is-masked"
-            name="pdf-passphrase"
-            type="text"
-            inputmode="text"
-            autocomplete="off"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck="false"
-            enterkeyhint="go"
-            aria-describedby="password-hint${error ? " password-error" : ""}"
-            aria-invalid="${error ? "true" : "false"}"
-            aria-label="PDF password"
-          />
-          <button type="button" class="text-button reveal-button" data-action="toggle-password" aria-pressed="false">Show</button>
-        </div>
-        <p id="password-hint" class="field-hint">The password is used in memory and never saved.</p>
-        ${error ? `<p id="password-error" class="inline-error" role="alert">${escapeHtml(error)}</p>` : ""}
-        <button class="primary-button" type="submit">Create unprotected copy</button>
-      </form>
-    </section>
-  `;
-}
-
-function processingStage(file: File): string {
-  return `
-    <section class="task-surface processing-surface" aria-labelledby="surface-title" aria-live="polite" aria-busy="true">
-      <div class="surface-heading">
-        <div>
-          <p class="surface-kicker">working locally</p>
-          <h2 id="surface-title">Creating your copy</h2>
-        </div>
-        <span class="step-count">2 / 2</span>
-      </div>
-      ${selectedFileRow(file, false)}
-      <div class="processing-status" role="status">
-        <span class="processing-pulse" aria-hidden="true"></span>
-        <span>Removing the password protection…</span>
       </div>
     </section>
   `;
@@ -252,33 +193,20 @@ function readyStage(stageToRender: Extract<Stage, { kind: "ready" }>): string {
   const file = outputFileForStage(stageToRender);
   const canSaveOrShare = canShareFile(file);
   const primaryLabel = canSaveOrShare ? "Save or share" : "Download copy";
-  const primaryIcon = canSaveOrShare ? shareIcon : downloadIcon;
+  const primaryIcon = canSaveOrShare ? shareIcon() : downloadIcon();
 
   return `
-    <section class="task-surface ready-surface" aria-labelledby="surface-title">
-      <div class="surface-heading ready-heading">
-        <div>
-          <p class="surface-kicker">complete</p>
-          <h2 id="surface-title" tabindex="-1">Unprotected copy ready</h2>
-        </div>
-        <span class="ready-badge"><span></span>ready</span>
-      </div>
-      <div class="release-mark-wrap">${airGapMark()}</div>
-      <div class="result-file">
-        <div class="result-file-icon">${documentIcon}</div>
-        <div class="file-details">
-          <span class="file-state">new copy</span>
-          <strong title="${escapeHtml(stageToRender.outputName)}">${escapeHtml(stageToRender.outputName)}</strong>
-          <span>PDF · opens without a password</span>
+    <section class="flow-panel ready-panel" aria-labelledby="panel-title">
+      ${panelBar("New copy", "Ready", true)}
+      <div class="panel-body ready-grid">
+        ${selectedFileRow(file, false, true)}
+        <div class="ready-actions">
+          ${stageToRender.message ? `<p class="inline-error" role="alert">${escapeHtml(stageToRender.message)}</p>` : ""}
+          <button class="primary-button" type="button" data-action="save-output" aria-label="${primaryLabel}">${primaryIcon}<span>${primaryLabel}</span></button>
+          ${stageToRender.message ? '<button class="secondary-button" type="button" data-action="download-copy">Download copy</button>' : ""}
+          <button class="quiet-button reset-button" type="button" data-action="start-over">Choose another PDF</button>
         </div>
       </div>
-      <p class="result-note">Anyone with this copy can open it.</p>
-      ${stageToRender.message ? `<p class="inline-error" role="alert">${escapeHtml(stageToRender.message)}</p>` : ""}
-      <div class="action-stack">
-        <button class="primary-button" type="button" data-action="save-output" aria-label="${primaryLabel}">${primaryIcon}<span>${primaryLabel}</span></button>
-        ${stageToRender.message ? '<button class="secondary-button" type="button" data-action="download-copy">Download copy</button>' : ""}
-      </div>
-      <button class="text-button reset-button" type="button" data-action="start-over">Choose another PDF</button>
     </section>
   `;
 }
@@ -286,43 +214,116 @@ function readyStage(stageToRender: Extract<Stage, { kind: "ready" }>): string {
 function stageMarkup(): string {
   if (stage.kind === "choose") return chooseStage(stage);
   if (stage.kind === "password") return passwordStage(stage.file);
-  if (stage.kind === "processing") return processingStage(stage.file);
   if (stage.kind === "ready") return readyStage(stage);
   return passwordStage(stage.file, stage.message);
 }
 
-function render(): void {
+function privacyLine(): string {
+  return `
+    <p class="privacy-line">
+      ${shieldCheckIcon()}
+      <span>Processed on this device. Nothing is uploaded.</span>
+    </p>
+  `;
+}
+
+function signatureFooter(): string {
+  return `
+    <footer class="project-signature" role="contentinfo">
+      <a
+        href="https://rittik.fyi"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="made with love by rittik, visit rittik.fyi"
+      >
+        <span>made with</span>
+        ${signatureHeart()}
+        <span>by</span>
+        <strong>rittik</strong>
+      </a>
+    </footer>
+  `;
+}
+
+type ViewTransitionHandle = {
+  updateCallbackDone?: Promise<unknown>;
+  finished?: Promise<unknown>;
+};
+
+type StartViewTransition = (update: () => void) => ViewTransitionHandle;
+
+let hasRendered = false;
+
+function commitRender(useFallbackMotion: boolean): void {
   const root = app as HTMLDivElement;
   root.dataset.stage = stage.kind;
-  root.innerHTML = `
-    <div class="app-frame">
-      ${header()}
-      <main class="app-main">
-        <div class="content-grid">
-          <section class="identity-panel" aria-labelledby="page-title">
-            ${hero(stage)}
-          </section>
-          <div class="task-area">
-            ${stageMarkup()}
-          </div>
-        </div>
-        ${stage.kind === "choose" ? privacyRail() : ""}
-      </main>
-    </div>
-  `;
+  root.dataset.processing = isProcessing ? "true" : "false";
+  root.dataset.motion = useFallbackMotion ? "fallback" : "none";
 
-  bindEvents();
-
-  if (stage.kind === "password" || stage.kind === "error") {
-    const input = document.querySelector<HTMLInputElement>("#pdf-password");
-    input?.focus();
+  let experience = root.querySelector<HTMLElement>(".experience");
+  if (!experience) {
+    root.innerHTML = `
+      <div class="app-frame">
+        ${header()}
+        <main class="app-main">
+          <div class="experience"></div>
+          ${signatureFooter()}
+        </main>
+      </div>
+    `;
+    experience = root.querySelector<HTMLElement>(".experience");
   }
 
+  if (!experience) throw new Error("unseal experience region is missing");
+  experience.innerHTML = `${intro(stage)}${stageMarkup()}${privacyLine()}`;
+  bindEvents();
+  updateKeyboardMode();
+}
+
+function focusCurrentStage(): void {
   if (stage.kind === "ready") {
-    document.querySelector<HTMLElement>("#surface-title")?.focus();
+    document.querySelector<HTMLElement>("#panel-title")?.focus();
   }
 
   updateKeyboardMode();
+}
+
+function render(): Promise<void> {
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const shouldAnimate = hasRendered && !reducedMotion;
+  const candidate = Reflect.get(document, "startViewTransition");
+  const startViewTransition = typeof candidate === "function"
+    ? candidate.bind(document) as StartViewTransition
+    : undefined;
+
+  hasRendered = true;
+
+  if (shouldAnimate && startViewTransition) {
+    const transition = startViewTransition(() => commitRender(false));
+    const updateDone = transition.updateCallbackDone ?? Promise.resolve();
+    const finished = transition.finished ?? updateDone;
+    void finished
+      .then(() => requestAnimationFrame(focusCurrentStage))
+      .catch(() => requestAnimationFrame(focusCurrentStage));
+    return updateDone.then(() => undefined).catch(() => undefined);
+  }
+
+  commitRender(shouldAnimate);
+  requestAnimationFrame(focusCurrentStage);
+  return Promise.resolve();
+}
+
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+async function keepProcessingVisible(startedAt: number): Promise<void> {
+  const remaining = MIN_PROCESSING_MS - (performance.now() - startedAt);
+  if (remaining > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remaining));
+  }
 }
 
 function openFilePicker(): void {
@@ -336,32 +337,78 @@ function selectFile(file: File | undefined): void {
   if (!file) return;
   if (!isPdf(file)) {
     stage = { kind: "choose", message: "Choose a PDF file to continue." };
-    render();
-    document.querySelector<HTMLInputElement>("#pdf-file")?.focus();
+    void render();
     return;
   }
   stage = { kind: "password", file };
-  render();
+  void render();
 }
 
-async function unlock(file: File, password: string): Promise<void> {
+function setProcessingButton(busy: boolean): void {
+  const root = app as HTMLDivElement;
+  root.dataset.processing = busy ? "true" : "false";
+  const section = document.querySelector<HTMLElement>(".password-panel");
+  const button = document.querySelector<HTMLButtonElement>('[data-action="create-copy"]');
+  if (!section || !button) return;
+
+  section.setAttribute("aria-busy", String(busy));
+  button.disabled = busy;
+  button.setAttribute("aria-busy", String(busy));
+  button.innerHTML = busy ? `${loaderCircleIcon()}<span>Creating copy</span>` : "Create copy";
+
+  if (busy) {
+    document.querySelector("#document-error")?.remove();
+    const input = document.querySelector<HTMLTextAreaElement>(DOCUMENT_SECRET_SELECTOR);
+    input?.setAttribute("aria-invalid", "false");
+    input?.setAttribute("aria-describedby", "document-hint");
+  }
+}
+
+function showUnlockError(message: string): void {
+  setProcessingButton(false);
+  (app as HTMLDivElement).dataset.stage = "error";
+  const input = document.querySelector<HTMLTextAreaElement>(DOCUMENT_SECRET_SELECTOR);
+  const button = document.querySelector<HTMLButtonElement>('[data-action="create-copy"]');
+  if (!input || !button) return;
+
+  input.setAttribute("aria-invalid", "true");
+  input.setAttribute("aria-describedby", "document-hint document-error");
+  let error = document.querySelector<HTMLParagraphElement>("#document-error");
+  if (!error) {
+    error = document.createElement("p");
+    error.id = "document-error";
+    error.className = "inline-error";
+    error.setAttribute("role", "alert");
+    button.before(error);
+  }
+  error.textContent = message;
+}
+
+async function unlock(file: File, password: string, secretInput: HTMLTextAreaElement | null): Promise<void> {
   if (!password) {
     stage = { kind: "error", file, message: EMPTY_PASSWORD_ERROR };
-    render();
+    await render();
     return;
   }
 
-  stage = { kind: "processing", file };
-  render();
+  isProcessing = true;
+  setProcessingButton(true);
+  await nextPaint();
+  const processingStartedAt = performance.now();
 
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const output = await decryptPdf(bytes, password);
+    await keepProcessingVisible(processingStartedAt);
+    isProcessing = false;
     stage = { kind: "ready", file, output, outputName: outputName(file) };
-    render();
+    await render();
+    if (secretInput) secretInput.value = "";
   } catch {
+    await keepProcessingVisible(processingStartedAt);
+    isProcessing = false;
     stage = { kind: "error", file, message: GENERIC_PDF_ERROR };
-    render();
+    showUnlockError(GENERIC_PDF_ERROR);
   }
 }
 
@@ -422,7 +469,7 @@ async function saveOutput(): Promise<void> {
     const result = await nativeShare(file);
     if (result === "failed" && stage.kind === "ready") {
       stage = { ...stage, message: "The share sheet didn't open. Try again or download the copy." };
-      render();
+      await render();
     }
     return;
   }
@@ -435,6 +482,13 @@ function downloadCopy(): void {
   if (file) directDownload(file);
 }
 
+function createCopyFromPassword(): void {
+  if (isProcessing || (stage.kind !== "password" && stage.kind !== "error")) return;
+  const input = document.querySelector<HTMLTextAreaElement>(DOCUMENT_SECRET_SELECTOR);
+  const password = input?.value ?? "";
+  void unlock(stage.file, password, input ?? null);
+}
+
 function bindEvents(): void {
   const fileInput = document.querySelector<HTMLInputElement>("#pdf-file");
   fileInput?.addEventListener("change", () => selectFile(fileInput.files?.[0]));
@@ -443,27 +497,39 @@ function bindEvents(): void {
     button.addEventListener("click", openFilePicker);
   });
 
-  document.querySelector<HTMLFormElement>("#unlock-form")?.addEventListener("submit", (event) => {
+  document.querySelector<HTMLButtonElement>('[data-action="create-copy"]')?.addEventListener("click", createCopyFromPassword);
+
+  document.querySelector<HTMLTextAreaElement>(DOCUMENT_SECRET_SELECTOR)?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.isComposing) return;
     event.preventDefault();
-    if (stage.kind !== "password" && stage.kind !== "error") return;
-    const form = new FormData(event.currentTarget as HTMLFormElement);
-    void unlock(stage.file, String(form.get("pdf-passphrase") ?? ""));
+    createCopyFromPassword();
   });
 
-  document.querySelector<HTMLInputElement>("#pdf-password")?.addEventListener("input", (event) => {
-    const input = event.currentTarget as HTMLInputElement;
+  document.querySelector<HTMLTextAreaElement>(DOCUMENT_SECRET_SELECTOR)?.addEventListener("input", (event) => {
+    const input = event.currentTarget as HTMLTextAreaElement;
     input.setAttribute("aria-invalid", "false");
   });
 
-  document.querySelector<HTMLButtonElement>('[data-action="toggle-password"]')?.addEventListener("click", (event) => {
+  const toggleButton = document.querySelector<HTMLButtonElement>('[data-action="toggle-password"]');
+  toggleButton?.addEventListener("pointerdown", (event) => {
+    if (document.activeElement === document.querySelector<HTMLTextAreaElement>(DOCUMENT_SECRET_SELECTOR)) {
+      event.preventDefault();
+    }
+  });
+  toggleButton?.addEventListener("mousedown", (event) => {
+    if (document.activeElement === document.querySelector<HTMLTextAreaElement>(DOCUMENT_SECRET_SELECTOR)) {
+      event.preventDefault();
+    }
+  });
+  toggleButton?.addEventListener("click", (event) => {
     const button = event.currentTarget as HTMLButtonElement;
-    const input = document.querySelector<HTMLInputElement>("#pdf-password");
+    const input = document.querySelector<HTMLTextAreaElement>(DOCUMENT_SECRET_SELECTOR);
     if (!input) return;
     const showing = !input.classList.contains("is-masked");
     input.classList.toggle("is-masked", showing);
-    button.textContent = showing ? "Show" : "Hide";
+    button.innerHTML = showing ? eyeIcon() : eyeOffIcon();
     button.setAttribute("aria-pressed", String(!showing));
-    button.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+    button.setAttribute("aria-label", showing ? "show password" : "hide password");
   });
 
   document.querySelector<HTMLButtonElement>('[data-action="save-output"]')?.addEventListener("click", () => {
@@ -473,10 +539,12 @@ function bindEvents(): void {
   document.querySelector<HTMLButtonElement>('[data-action="download-copy"]')?.addEventListener("click", downloadCopy);
 
   document.querySelector<HTMLButtonElement>('[data-action="start-over"]')?.addEventListener("click", () => {
+    const secret = document.querySelector<HTMLTextAreaElement>(DOCUMENT_SECRET_SELECTOR);
+    if (secret) secret.value = "";
     if (outputUrl) URL.revokeObjectURL(outputUrl);
     outputUrl = undefined;
     stage = { kind: "choose" };
-    render();
+    void render();
   });
 }
 
@@ -484,7 +552,7 @@ function updateKeyboardMode(): void {
   const root = app as HTMLDivElement;
   const viewport = window.visualViewport;
   const activeElement = document.activeElement;
-  const inputFocused = activeElement instanceof HTMLInputElement && activeElement.id === "pdf-password";
+  const inputFocused = activeElement instanceof HTMLTextAreaElement && activeElement.matches(DOCUMENT_SECRET_SELECTOR);
   const keyboardOpen = Boolean(
     inputFocused
       && viewport
@@ -493,31 +561,15 @@ function updateKeyboardMode(): void {
   root.dataset.keyboard = keyboardOpen ? "true" : "false";
 }
 
-document.addEventListener("keydown", (event) => {
-  if (["Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", " "].includes(event.key)) {
-    keyboardModality = true;
-  }
-  const active = document.activeElement;
-  if (active instanceof HTMLInputElement && active.id === "pdf-password") {
-    active.closest(".password-field")?.classList.add("is-keyboard-focus");
-  }
-}, true);
-
-document.addEventListener("pointerdown", () => {
-  keyboardModality = false;
-  document.querySelector(".password-field.is-keyboard-focus")?.classList.remove("is-keyboard-focus");
-}, true);
-
 document.addEventListener("focusin", (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLInputElement) || target.id !== "pdf-password") return;
-  target.closest(".password-field")?.classList.toggle("is-keyboard-focus", keyboardModality);
+  if (!(target instanceof HTMLTextAreaElement) || !target.matches(DOCUMENT_SECRET_SELECTOR)) return;
   updateKeyboardMode();
 });
 
 document.addEventListener("focusout", (event) => {
   const target = event.target;
-  if (target instanceof HTMLInputElement && target.id === "pdf-password") updateKeyboardMode();
+  if (target instanceof HTMLTextAreaElement && target.matches(DOCUMENT_SECRET_SELECTOR)) updateKeyboardMode();
 });
 
 window.visualViewport?.addEventListener("resize", updateKeyboardMode);
@@ -527,4 +579,23 @@ if (import.meta.env.DEV) {
   window.__unsealedPdf = { decrypt: decryptPdf };
 }
 
-render();
+async function startApp(): Promise<void> {
+  const root = document.documentElement;
+  let fontReady = false;
+
+  try {
+    await Promise.race([
+      document.fonts.load('510 16px "Inter Variable"'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("font timeout")), 1800)),
+    ]);
+    fontReady = document.fonts.check('510 16px "Inter Variable"');
+  } catch {
+    fontReady = false;
+  }
+
+  root.classList.remove("fonts-loading");
+  root.classList.add(fontReady ? "fonts-ready" : "fonts-fallback");
+  await render();
+}
+
+void startApp();

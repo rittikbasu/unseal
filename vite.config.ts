@@ -5,13 +5,12 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "unseal-mark.svg"],
       manifest: {
         name: "unseal",
         short_name: "unseal",
-        description: "create an unprotected copy of a known-password PDF on this device.",
-        theme_color: "#090a0c",
-        background_color: "#090a0c",
+        description: "Unseal your password protected PDF. Create a copy that opens without a password. Your PDF never leaves this device.",
+        theme_color: "#08090a",
+        background_color: "#08090a",
         display: "standalone",
         start_url: "/",
         icons: [
@@ -28,7 +27,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,wasm,png,ico}"],
+        globPatterns: ["**/*.{js,css,html,svg,wasm,png,ico,woff2}"],
       },
     }),
   ],

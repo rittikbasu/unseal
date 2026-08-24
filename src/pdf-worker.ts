@@ -49,7 +49,7 @@ async function decrypt(request: DecryptRequest): Promise<DecryptReply> {
       return {
         id: request.id,
         ok: false,
-        message: "We couldn't open that PDF with this password. Check the password or try another copy of the file.",
+        message: "Wrong password. Try again.",
       };
     }
 

@@ -7,13 +7,10 @@ type Pending = {
   reject: (error: Error) => void;
 };
 
-const worker = new Worker(new URL("./pdf-worker.ts", import.meta.url), {
-  type: "module",
-});
 const pending = new Map<number, Pending>();
 let nextId = 1;
 
-worker.addEventListener("message", (event: MessageEvent<WorkerReply>) => {
+function handleWorkerMessage(event: MessageEvent<WorkerReply>): void {
   const request = pending.get(event.data.id);
   if (!request) return;
 
@@ -23,14 +20,28 @@ worker.addEventListener("message", (event: MessageEvent<WorkerReply>) => {
   } else {
     request.reject(new Error(event.data.message));
   }
-});
+}
 
-worker.addEventListener("error", () => {
+function handleWorkerError(): void {
   for (const request of pending.values()) {
     request.reject(new Error("The PDF engine could not start. Reload and try again."));
   }
   pending.clear();
-});
+  worker.terminate();
+  worker = createWorker();
+}
+
+function createWorker(): Worker {
+  const instance = new Worker(new URL("./pdf-worker.ts", import.meta.url), {
+    type: "module",
+  });
+  instance.addEventListener("message", handleWorkerMessage);
+  instance.addEventListener("error", handleWorkerError);
+  return instance;
+}
+
+let worker = createWorker();
+
 
 export function decryptPdf(input: Uint8Array, password: string): Promise<Uint8Array> {
   const id = nextId++;
