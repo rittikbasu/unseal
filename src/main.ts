@@ -192,7 +192,7 @@ function outputFileForStage(stageToRender: Extract<Stage, { kind: "ready" }>): F
 function readyStage(stageToRender: Extract<Stage, { kind: "ready" }>): string {
   const file = outputFileForStage(stageToRender);
   const canSaveOrShare = canShareFile(file);
-  const primaryLabel = canSaveOrShare ? "Save or share" : "Download copy";
+  const primaryLabel = canSaveOrShare ? "Save or share" : "Download";
   const primaryIcon = canSaveOrShare ? shareIcon() : downloadIcon();
 
   return `
@@ -203,7 +203,7 @@ function readyStage(stageToRender: Extract<Stage, { kind: "ready" }>): string {
         <div class="ready-actions">
           ${stageToRender.message ? `<p class="inline-error" role="alert">${escapeHtml(stageToRender.message)}</p>` : ""}
           <button class="primary-button" type="button" data-action="save-output" aria-label="${primaryLabel}">${primaryIcon}<span>${primaryLabel}</span></button>
-          ${stageToRender.message ? '<button class="secondary-button" type="button" data-action="download-copy">Download copy</button>' : ""}
+          ${stageToRender.message ? '<button class="secondary-button" type="button" data-action="download-copy">Download</button>' : ""}
           <button class="quiet-button reset-button" type="button" data-action="start-over">Choose another PDF</button>
         </div>
       </div>

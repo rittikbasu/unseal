@@ -302,11 +302,11 @@ test("guides a user from a protected PDF to an unprotected copy", async ({ page 
   await expect(page.getByRole("heading", { name: "Your copy is ready." })).toBeVisible();
   await expect(page.locator('[data-lucide="file"]')).toHaveCount(1);
   await expect(page.locator('[data-lucide="file-lock"]')).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Download copy" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Share PDF" })).toHaveCount(0);
 
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download copy" }).click();
+  await page.getByRole("button", { name: "Download" }).click();
   const download = await downloadPromise;
 
   const tempDir = await mkdtemp(`${tmpdir()}/unseal-ui-`);
@@ -392,7 +392,7 @@ test("uses the native file sheet for Save or share on iPhone when supported", as
   await page.getByRole("button", { name: "Create copy" }).click();
   await expect(page.getByRole("heading", { name: "Your copy is ready." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save or share" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Download copy" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Download" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Save or share" }).click();
   await expect.poll(() => page.evaluate(() => (window as Window & { __sharedFileName?: string }).__sharedFileName)).toBe("encrypted-unsealed.pdf");

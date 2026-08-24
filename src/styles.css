@@ -56,8 +56,6 @@ html.fonts-fallback {
 
 body {
   min-width: 320px;
-  min-height: 100svh;
-  min-height: 100dvh;
   margin: 0;
   overflow-x: hidden;
   background: var(--bg);
@@ -98,15 +96,18 @@ button:disabled {
   border: 0;
 }
 
-#app,
-.app-frame {
-  min-height: 100svh;
-  min-height: 100dvh;
-}
-
 .app-frame {
   display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
   flex-direction: column;
+}
+
+@media (display-mode: standalone) {
+  .app-frame {
+    min-height: 100vh;
+    min-height: 100lvh;
+  }
 }
 
 .site-header {
@@ -160,7 +161,7 @@ button:disabled {
   width: 100%;
   flex: 0 0 auto;
   margin-block: auto;
-  padding: clamp(32px, 6dvh, 76px) 0;
+  padding: clamp(32px, 6svh, 76px) 0;
 }
 
 .intro {
@@ -735,7 +736,7 @@ button:disabled {
   }
 
   .experience {
-    padding: clamp(24px, 5dvh, 54px) 0;
+    padding: clamp(24px, 5svh, 54px) 0;
   }
 
   .intro {
@@ -807,7 +808,7 @@ button:disabled {
   }
 
   .experience {
-    padding: clamp(20px, 4dvh, 39px) 0;
+    padding: clamp(20px, 4svh, 39px) 0;
   }
 
   .intro {
@@ -855,7 +856,7 @@ button:disabled {
 
   #app[data-stage="password"] .experience,
   #app[data-stage="error"] .experience {
-    padding: clamp(18px, 3dvh, 32px) 0;
+    padding: clamp(18px, 3svh, 32px) 0;
   }
 
   #app[data-stage="password"] .intro,

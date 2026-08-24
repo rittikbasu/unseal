@@ -17,9 +17,9 @@ unseal keeps the whole workflow on-device. it is a small focused tool for one jo
 3. choose the pdf
 4. enter the password you already have
 5. tap **save or share** on iphone, then choose save to files or another app
-6. use **download copy** on browsers without file sharing support
+6. use **download** on browsers without file sharing support
 
-on iphone, **save or share** uses the native web share sheet when the browser supports sharing pdf files. the sheet can save the copy to files or pass it to another app. on other browsers, **download copy** uses the browser's normal download flow.
+on iphone, **save or share** uses the native web share sheet when the browser supports sharing pdf files. the sheet can save the copy to files or pass it to another app. on other browsers, **download** uses the browser's normal download flow.
 
 ## how it works
 
