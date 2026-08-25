@@ -8,32 +8,21 @@ import {
   Share as ShareNode,
   ShieldCheck as ShieldCheckNode,
 } from "lucide";
+import { escapeHtml } from "./html";
 
 type IconNode = readonly (readonly [string, Readonly<Record<string, string>>])[];
-
-function escapeAttribute(value: string): string {
-  return value.replace(/[&<>\"]/g, (character) => {
-    const entities: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '\"': "&quot;",
-    };
-    return entities[character];
-  });
-}
 
 function renderIcon(node: IconNode, name: string, className: string): string {
   const children = node
     .map(([tag, attributes]) => {
       const serialized = Object.entries(attributes)
-        .map(([attribute, value]) => `${attribute}="${escapeAttribute(value)}"`)
+        .map(([attribute, value]) => `${attribute}="${escapeHtml(value)}"`)
         .join(" ");
       return `<${tag}${serialized ? ` ${serialized}` : ""}></${tag}>`;
     })
     .join("");
 
-  return `<svg class="${className}" data-lucide="${name}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${children}</svg>`;
+  return `<svg class="${escapeHtml(className)}" data-lucide="${escapeHtml(name)}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${children}</svg>`;
 }
 
 export const fileLockIcon = (className = "file-icon-svg"): string => renderIcon(FileLockNode as IconNode, "file-lock", className);

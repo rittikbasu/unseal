@@ -1,20 +1,11 @@
 import createQpdfModule, { type QpdfInstance } from "@neslinesli93/qpdf-wasm";
 import wasmUrl from "@neslinesli93/qpdf-wasm/dist/qpdf.wasm?url";
+import type { DecryptReply, DecryptRequest } from "./pdf-protocol";
 
 type QpdfFileSystem = QpdfInstance["FS"] & {
   writeFile(path: string, data: Uint8Array): void;
   unlink(path: string): void;
 };
-
-type DecryptRequest = {
-  id: number;
-  input: ArrayBuffer;
-  password: string;
-};
-
-type DecryptReply =
-  | { id: number; ok: true; output: ArrayBuffer }
-  | { id: number; ok: false; message: string };
 
 type WorkerScope = {
   addEventListener(type: "message", listener: (event: MessageEvent<DecryptRequest>) => void): void;
@@ -28,6 +19,14 @@ let queue = Promise.resolve();
 function getQpdf(): Promise<QpdfInstance> {
   modulePromise ??= createQpdfModule({ locateFile: () => wasmUrl });
   return modulePromise;
+}
+
+function transferableBuffer(input: Uint8Array): ArrayBuffer {
+  if (input.byteOffset === 0 && input.byteLength === input.buffer.byteLength) {
+    return input.buffer as ArrayBuffer;
+  }
+
+  return input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength) as ArrayBuffer;
 }
 
 async function decrypt(request: DecryptRequest): Promise<DecryptReply> {
@@ -46,22 +45,13 @@ async function decrypt(request: DecryptRequest): Promise<DecryptReply> {
     ]);
 
     if (exitCode !== 0) {
-      return {
-        id: request.id,
-        ok: false,
-        message: "Wrong password. Try again.",
-      };
+      return { id: request.id, ok: false };
     }
 
     const output = fs.readFile(outputPath);
-    const transferable = new Uint8Array(output).buffer;
-    return { id: request.id, ok: true, output: transferable };
+    return { id: request.id, ok: true, output: transferableBuffer(output) };
   } catch {
-    return {
-      id: request.id,
-      ok: false,
-      message: "This PDF could not be opened. Try another copy of the file.",
-    };
+    return { id: request.id, ok: false };
   } finally {
     for (const path of [inputPath, outputPath]) {
       try {
@@ -81,10 +71,6 @@ workerScope.addEventListener("message", (event: MessageEvent<DecryptRequest>) =>
       workerScope.postMessage(reply, transfer);
     })
     .catch(() => {
-      workerScope.postMessage({
-        id: event.data.id,
-        ok: false,
-        message: "The PDF engine could not start. Reload and try again.",
-      } satisfies DecryptReply);
+      workerScope.postMessage({ id: event.data.id, ok: false } satisfies DecryptReply);
     });
 });

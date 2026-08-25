@@ -12,5 +12,11 @@ def make_icon(size: int) -> Image.Image:
     return Image.open(SOURCE).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
 
 
+def make_brand_mark() -> Image.Image:
+    return Image.open(SOURCE).convert("RGBA").resize((75, 83), Image.Resampling.LANCZOS)
+
+
 for name, size in (("favicon", 64), ("apple-touch-icon", 180), ("pwa-192", 192), ("pwa-512", 512)):
     make_icon(size).save(ROOT / "public" / f"{name}.png", format="PNG", optimize=True)
+
+make_brand_mark().save(ROOT / "public" / "unseal-envelope.png", format="PNG", optimize=True)

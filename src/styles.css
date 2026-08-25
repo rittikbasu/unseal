@@ -26,7 +26,6 @@
   --line-soft: rgba(255, 255, 255, 0.055);
   --accent: #6f96e8;
   --accent-focus: rgba(111, 150, 232, 0.2);
-  --success: #73c89f;
   --danger: #e88484;
   --danger-wash: rgba(232, 132, 132, 0.07);
 }
@@ -354,19 +353,6 @@ button:disabled {
   font-weight: 510;
   letter-spacing: -0.13px;
   transition: color 140ms ease, background 140ms ease;
-}
-
-.password-grid,
-.ready-grid {
-  display: block;
-}
-
-.password-controls {
-  min-width: 0;
-}
-
-.ready-actions {
-  min-width: 0;
 }
 
 .password-controls {
@@ -766,11 +752,6 @@ button:disabled {
     padding: 19px;
   }
 
-  .password-grid,
-  .ready-grid {
-    display: block;
-  }
-
   .file-row {
     min-height: 0;
     padding: 11px;
@@ -854,24 +835,20 @@ button:disabled {
     text-overflow: ellipsis;
   }
 
-  #app[data-stage="password"] .experience,
-  #app[data-stage="error"] .experience {
+  #app[data-stage="password"] .experience {
     padding: clamp(18px, 3svh, 32px) 0;
   }
 
-  #app[data-stage="password"] .intro,
-  #app[data-stage="error"] .intro {
+  #app[data-stage="password"] .intro {
     margin-bottom: 25px;
   }
 
-  #app[data-stage="password"] .intro h1,
-  #app[data-stage="error"] .intro h1 {
+  #app[data-stage="password"] .intro h1 {
     font-size: 30px;
     line-height: 1.15;
   }
 
-  #app[data-stage="password"] .intro p,
-  #app[data-stage="error"] .intro p {
+  #app[data-stage="password"] .intro p {
     margin-top: 10px;
   }
 }

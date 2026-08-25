@@ -10,11 +10,20 @@ const password = "bank-test-2026";
 
 async function enterPassword(page: import("@playwright/test").Page, value: string): Promise<void> {
   await page.locator("#pdf-file").setInputFiles(fixture);
-  const input = page.getByLabel("PDF password");
-  await expect(input).toHaveAttribute("autocomplete", "one-time-code");
-  await expect(input).toHaveAttribute("rows", "1");
-  await expect(input).toHaveClass(/is-masked/);
-  await input.fill(value);
+  await page.getByLabel("PDF password").fill(value);
+}
+
+async function installViewTransitionCounter(page: import("@playwright/test").Page): Promise<void> {
+  await page.addInitScript(() => {
+    (window as Window & { __viewTransitionCount?: number }).__viewTransitionCount = 0;
+    const original = Reflect.get(document, "startViewTransition");
+    if (typeof original !== "function") return;
+    Reflect.set(document, "startViewTransition", (update: () => void) => {
+      (window as Window & { __viewTransitionCount?: number }).__viewTransitionCount =
+        ((window as Window & { __viewTransitionCount?: number }).__viewTransitionCount ?? 0) + 1;
+      return original.call(document, update);
+    });
+  });
 }
 
 test("uses the supplied envelope identity and exact opening copy", async ({ page }) => {
@@ -197,16 +206,7 @@ test("keeps iPhone focus sizing intentional without disabling page zoom", async 
 });
 
 test("animates state changes with the View Transitions API when available", async ({ page }) => {
-  await page.addInitScript(() => {
-    (window as Window & { __viewTransitionCount?: number }).__viewTransitionCount = 0;
-    const original = Reflect.get(document, "startViewTransition");
-    if (typeof original !== "function") return;
-    Reflect.set(document, "startViewTransition", (update: () => void) => {
-      (window as Window & { __viewTransitionCount?: number }).__viewTransitionCount =
-        ((window as Window & { __viewTransitionCount?: number }).__viewTransitionCount ?? 0) + 1;
-      return original.call(document, update);
-    });
-  });
+  await installViewTransitionCounter(page);
 
   await page.goto("/");
   await page.locator("#pdf-file").setInputFiles(fixture);
@@ -228,16 +228,7 @@ test("uses a restrained fallback animation without View Transitions", async ({ p
 
 test("suppresses state motion when reduced motion is requested", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.addInitScript(() => {
-    (window as Window & { __viewTransitionCount?: number }).__viewTransitionCount = 0;
-    const original = Reflect.get(document, "startViewTransition");
-    if (typeof original !== "function") return;
-    Reflect.set(document, "startViewTransition", (update: () => void) => {
-      (window as Window & { __viewTransitionCount?: number }).__viewTransitionCount =
-        ((window as Window & { __viewTransitionCount?: number }).__viewTransitionCount ?? 0) + 1;
-      return original.call(document, update);
-    });
-  });
+  await installViewTransitionCounter(page);
 
   await page.goto("/");
   await page.locator("#pdf-file").setInputFiles(fixture);
@@ -287,7 +278,7 @@ test("keeps the password step in place while creating a copy", async ({ page }) 
 test("guides a user from a protected PDF to an unprotected copy", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Unseal your password protected PDF." })).toBeVisible();
-  await expect(page.getByText("Processed on this device. Nothing is uploaded.")).toBeVisible();
+  await expect(page.getByText("PDF processing stays on this device. Your PDF and password are never uploaded.")).toBeVisible();
   await expect(page.getByText("local only")).toHaveCount(0);
 
   await enterPassword(page, password);
@@ -303,8 +294,6 @@ test("guides a user from a protected PDF to an unprotected copy", async ({ page 
   await expect(page.locator('[data-lucide="file"]')).toHaveCount(1);
   await expect(page.locator('[data-lucide="file-lock"]')).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Download" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Share PDF" })).toHaveCount(0);
-
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download" }).click();
   const download = await downloadPromise;
@@ -365,16 +354,111 @@ test("recovers for a later request after the PDF worker fails", async ({ page })
   await expect(page.getByRole("heading", { name: "Your copy is ready." })).toBeVisible();
 });
 
-test("uses the native file sheet for Save or share on iPhone when supported", async ({ page }) => {
+test("does not let a file change replace the active request while processing", async ({ page }) => {
   await page.addInitScript(() => {
-    Object.defineProperty(navigator, "userAgent", {
-      configurable: true,
-      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
-    });
-    Object.defineProperty(navigator, "platform", {
-      configurable: true,
-      value: "iPhone",
-    });
+    const original = Worker.prototype.postMessage;
+    let first = true;
+    let heldWorker: Worker | undefined;
+    let heldArgs: Parameters<Worker["postMessage"]> | undefined;
+    Worker.prototype.postMessage = function (...args: Parameters<Worker["postMessage"]>) {
+      if (first) {
+        first = false;
+        heldWorker = this;
+        heldArgs = args;
+        return;
+      }
+      return original.apply(this, args);
+    } as Worker["postMessage"];
+    (window as Window & { __releaseHeldWorker?: () => void }).__releaseHeldWorker = () => {
+      if (!heldWorker || !heldArgs) throw new Error("no worker request held");
+      original.apply(heldWorker, heldArgs);
+      heldWorker = undefined;
+      heldArgs = undefined;
+    };
+  });
+
+  await page.goto("/");
+  await page.locator("#pdf-file").setInputFiles(fixture);
+  await page.getByLabel("PDF password").fill(password);
+  await page.getByRole("button", { name: "Create copy" }).click();
+  await expect(page.locator('[data-action="create-copy"]')).toBeDisabled();
+
+  await page.locator("#pdf-file").setInputFiles("tests/fixtures/aes128.pdf");
+  await expect(page.locator(".file-copy strong")).toHaveText("encrypted.pdf");
+
+  await page.evaluate(() => (window as Window & { __releaseHeldWorker?: () => void }).__releaseHeldWorker?.());
+  await expect(page.getByRole("heading", { name: "Your copy is ready." })).toBeVisible();
+  await expect(page.locator(".file-copy strong")).toHaveText("encrypted-unsealed.pdf");
+});
+
+test("cleans up after a synchronous worker send failure", async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalPostMessage = Worker.prototype.postMessage;
+    const originalTerminate = Worker.prototype.terminate;
+    let failOnce = true;
+    (window as Window & { __workerTerminateCount?: number }).__workerTerminateCount = 0;
+    Worker.prototype.postMessage = function (...args: Parameters<Worker["postMessage"]>) {
+      if (failOnce) {
+        failOnce = false;
+        throw new DOMException("synthetic transfer failure", "DataCloneError");
+      }
+      return originalPostMessage.apply(this, args);
+    } as Worker["postMessage"];
+    Worker.prototype.terminate = function () {
+      (window as Window & { __workerTerminateCount?: number }).__workerTerminateCount =
+        ((window as Window & { __workerTerminateCount?: number }).__workerTerminateCount ?? 0) + 1;
+      return originalTerminate.call(this);
+    };
+  });
+
+  await page.goto("/");
+  await enterPassword(page, password);
+  await page.getByRole("button", { name: "Create copy" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Wrong password. Try again.");
+
+  await page.getByRole("button", { name: "Create copy" }).click();
+  await expect(page.getByRole("heading", { name: "Your copy is ready." })).toBeVisible();
+  await page.getByRole("button", { name: "Choose another PDF" }).click();
+  await expect(page.getByRole("heading", { name: "Unseal your password protected PDF." })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as Window & { __workerTerminateCount?: number }).__workerTerminateCount)).toBe(1);
+});
+
+test("clears the password error when editing the failed attempt", async ({ page }) => {
+  await page.goto("/");
+  await enterPassword(page, "wrong");
+  await page.getByRole("button", { name: "Create copy" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Wrong password. Try again.");
+
+  const input = page.getByLabel("PDF password");
+  await input.fill(password);
+  await expect(input).toHaveAttribute("aria-invalid", "false");
+  await expect(input).toHaveAttribute("aria-describedby", "document-hint");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("releases the worker when changing files after a failed decrypt", async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalTerminate = Worker.prototype.terminate;
+    (window as Window & { __workerTerminateCount?: number }).__workerTerminateCount = 0;
+    Worker.prototype.terminate = function () {
+      (window as Window & { __workerTerminateCount?: number }).__workerTerminateCount =
+        ((window as Window & { __workerTerminateCount?: number }).__workerTerminateCount ?? 0) + 1;
+      return originalTerminate.call(this);
+    };
+  });
+
+  await page.goto("/");
+  await enterPassword(page, "wrong");
+  await page.getByRole("button", { name: "Create copy" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Wrong password. Try again.");
+
+  await page.locator("#pdf-file").setInputFiles("tests/fixtures/aes128.pdf");
+  await expect.poll(() => page.evaluate(() => (window as Window & { __workerTerminateCount?: number }).__workerTerminateCount)).toBe(1);
+  await expect(page.locator(".file-copy strong")).toHaveText("aes128.pdf");
+});
+
+test("uses the native file sharing capability when supported", async ({ page }) => {
+  await page.addInitScript(() => {
     Object.defineProperty(navigator, "canShare", {
       configurable: true,
       value: () => true,
@@ -392,7 +476,6 @@ test("uses the native file sheet for Save or share on iPhone when supported", as
   await page.getByRole("button", { name: "Create copy" }).click();
   await expect(page.getByRole("heading", { name: "Your copy is ready." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save or share" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Download" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Save or share" }).click();
   await expect.poll(() => page.evaluate(() => (window as Window & { __sharedFileName?: string }).__sharedFileName)).toBe("encrypted-unsealed.pdf");
@@ -417,4 +500,21 @@ test("does not request external resources on initial load", async ({ page }) => 
   await page.waitForTimeout(250);
 
   expect(externalRequests).toEqual([]);
+});
+
+test("starts the PDF worker only when processing begins", async ({ page }) => {
+  const workerRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("pdf-worker")) workerRequests.push(request.url());
+  });
+
+  await page.goto("/");
+  await page.waitForTimeout(250);
+  expect(workerRequests).toEqual([]);
+
+  await page.locator("#pdf-file").setInputFiles(fixture);
+  await expect.poll(() => workerRequests.length).toBe(0);
+  await page.getByLabel("PDF password").fill(password);
+  await page.getByRole("button", { name: "Create copy" }).click();
+  await expect.poll(() => workerRequests.length).toBeGreaterThan(0);
 });

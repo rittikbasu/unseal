@@ -38,8 +38,8 @@ there is no backend request in the document flow.
 - the original pdf is never modified, overwritten or deleted
 - the service worker caches application assets and the qpdf wasm binary, never user files or passwords
 - the font is self-hosted and there is no runtime cdn
-- there are no accounts, uploads, cookies, analytics or database
-- hosting analytics must remain disabled for the local-processing promise to stay accurate
+- there are no accounts, document uploads or database in the app
+- the hosted custom domain currently includes Cloudflare Insights for page analytics. this is separate from local pdf processing
 - the generated copy is unprotected. if you choose **save or share**, the copy is handed to the operating system's share sheet by your explicit action. share it only with people you trust
 
 ## boundaries
@@ -87,4 +87,4 @@ npm run build
 pnpm dlx wrangler@latest pages deploy dist --project-name unseal --branch main
 ```
 
-keep cloudflare insights and other hosting analytics disabled. the deployment must serve the generated service worker, manifest and qpdf wasm asset without rewriting or indefinitely caching `sw.js`.
+the hosted site currently keeps Cloudflare Insights enabled by deployment choice. the deployment must serve the generated service worker, manifest and qpdf wasm asset without rewriting or indefinitely caching `sw.js`.
